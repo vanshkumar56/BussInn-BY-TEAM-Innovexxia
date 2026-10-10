@@ -436,3 +436,81 @@
   max-width: 420px;
   z-index: 100;
 }
+/* ===== Live map (MapLibre) ===== */
+.live-map-section {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  background: var(--surface-card);
+}
+
+.live-map {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: 240px;
+  overflow: hidden;
+  border-radius: 16px;
+  contain: strict;
+  isolation: isolate;
+}
+
+.live-map .maplibregl-canvas-container,
+.live-map .maplibregl-canvas {
+  max-width: 100%;
+}
+
+.live-map .maplibregl-ctrl-attrib {
+  font-size: 9px;
+}
+
+.bus-marker {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #0758d8;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 22px;
+}
+
+.bus-marker img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ===== Shift gate ===== */
+.gate-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin: 0 0 12px 0;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.gate-ready        { background: #e0f2f1; color: #00695c; }
+.gate-verifying    { background: #fff8e1; color: #8d6e00; }
+.gate-too_far,
+.gate-suspicious,
+.gate-no_stop,
+.gate-unsupported,
+.gate-error        { background: #ffdad6; color: #ba1a1a; }
+.gate-locating,
+.gate-low_accuracy,
+.gate-stale        { background: #eef2f6; color: #5f6368; }
+
+.btn-trip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}

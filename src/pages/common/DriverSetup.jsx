@@ -1,9 +1,9 @@
+
 import { supabase } from "../../lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { MapPin, Navigation, BusFront } from "lucide-react";
+import { MapPin, BusFront } from "lucide-react";
 import locations from "../../data/locations.json";
-import { getBuses } from "../../lib/store";
 import "../../styles/DriverSetup.css";
 
 const normalizeLocation = (value = "") =>
@@ -11,30 +11,49 @@ const normalizeLocation = (value = "") =>
 
 const getLocationSuggestions = (query) => {
   const normalizedQuery = normalizeLocation(query);
-
   if (!normalizedQuery) return [];
 
   return locations
     .filter((location) =>
-      [
-        location.name,
-        location.district,
-        location.state,
-      ].some((value) =>
-        normalizeLocation(value).startsWith(normalizedQuery)
+      [location.name, location.district, location.state].some(
+        (value) => normalizeLocation(value).startsWith(normalizedQuery)
       )
     )
     .slice(0, 8);
 };
 
 const getMinutes = (time) => {
-  if (!time || !/^\d{2}:\d{2}/.test(String(time))) return null;
+  if (!time || !/^\d{1,2}:\d{2}/.test(String(time))) return null;
 
-  const [hours, minutes] = String(time).slice(0, 5).split(":").map(Number);
+  const [hours, minutes] = String(time)
+    .slice(0, 5)
+    .split(":")
+    .map(Number);
 
-  if (hours > 23 || minutes > 59) return null;
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
 
   return hours * 60 + minutes;
+};
+
+const withinTenMinutes = (scheduledTime, requestedTime) => {
+  const scheduled = getMinutes(scheduledTime);
+  const requested = getMinutes(requestedTime);
+
+  if (scheduled === null || requested === null) return false;
+
+  const difference = Math.abs(scheduled - requested);
+
+  // Supports time differences that cross midnight.
+  return Math.min(difference, 1440 - difference) <= 10;
 };
 
 const findBusMatches = (
@@ -56,7 +75,7 @@ const findBusMatches = (
       (a, b) => Number(a.stop_order) - Number(b.stop_order)
     );
 
-    if (routeStops.length === 0) return [];
+    if (!routeStops.length) return [];
 
     const departureIndex = routeStops.findIndex(
       (stop) => normalizeLocation(stop.station_name) === from
@@ -66,6 +85,7 @@ const findBusMatches = (
       (stop) => normalizeLocation(stop.station_name) === to
     );
 
+    // Both locations must exist, in the correct travel order.
     if (
       departureIndex < 0 ||
       destinationIndex <= departureIndex
@@ -76,155 +96,160 @@ const findBusMatches = (
     const departureStop = routeStops[departureIndex];
     const destinationStop = routeStops[destinationIndex];
 
-    // Match the actual scheduled departure and arrival times.
-    const scheduledDeparture = String(
-      departureStop.departure_time || ""
-    ).slice(0, 5);
+    if (!departureStop || !destinationStop) return [];
 
-    const scheduledArrival = String(
-      destinationStop.arrival_time || ""
-    ).slice(0, 5);
+    const scheduledDeparture =
+      departureStop.departure_time || departureStop.arrival_time || "";
+
+    const scheduledArrival =
+      destinationStop.arrival_time || destinationStop.departure_time || "";
 
     if (
-      !scheduledDeparture ||
-      !scheduledArrival ||
-      scheduledDeparture !== shiftStart ||
-      scheduledArrival !== shiftEnd
+      !withinTenMinutes(scheduledDeparture, shiftStart) ||
+      !withinTenMinutes(scheduledArrival, shiftEnd)
     ) {
       return [];
     }
 
-    return [{
-      ...bus,
-      matchedDeparture: departureStop.station_name,
-      matchedDestination: destinationStop.station_name,
-      matchedDepartureTime: scheduledDeparture,
-      matchedArrivalTime: scheduledArrival,
-      scheduleVerified: true,
-      stops: routeStops.map((stop) => ({
-        name: stop.station_name,
-        stopOrder: stop.stop_order,
-        arrivalTime: stop.arrival_time || "",
-        departureTime: stop.departure_time || "",
-      })),
-    }];
+    return [
+      {
+        ...bus,
+        matchedDeparture: departureStop.station_name,
+        matchedDestination: destinationStop.station_name,
+        matchedDepartureTime: String(scheduledDeparture).slice(0, 5),
+        matchedArrivalTime: String(scheduledArrival).slice(0, 5),
+        scheduleVerified: true,
+        stops: routeStops
+          .slice(departureIndex, destinationIndex + 1)
+          .map((stop) => ({
+            name: stop.station_name,
+            stopOrder: stop.stop_order,
+            arrivalTime: stop.arrival_time || "",
+            departureTime: stop.departure_time || "",
+          })),
+      },
+    ];
   });
 };
-
 
 const DriverSetup = () => {
   const navigate = useNavigate();
 
-  // 1. Global Language State (Reads from localStorage, persists across app)
- const [isHindi, setIsHindi] = useState(false);
+  const [isHindi, setIsHindi] = useState(
+    () => localStorage.getItem("bussinn_lang") === "hi"
+  );
 
-  const toggleLanguage = () => {
-    const newLangState = !isHindi;
-    setIsHindi(newLangState);
-    localStorage.setItem("bussinn_lang", newLangState ? "hi" : "en");
-  };
-
-  // Form State
   const [departurePoint, setDeparturePoint] = useState("");
   const [destinationPoint, setDestinationPoint] = useState("");
-  const [stops, setStops] = useState([]);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+
   const [error, setError] = useState("");
   const [activeLocationField, setActiveLocationField] = useState(null);
-const [buses, setBuses] = useState([]);
-const [selectedBusId, setSelectedBusId] = useState(null);
-const [busLoading, setBusLoading] = useState(false);
-const [busLoadError, setBusLoadError] = useState("");
 
-useEffect(() => {
-  let cancelled = false;
+  const [buses, setBuses] = useState([]);
+  const [selectedBusId, setSelectedBusId] = useState(null);
+  const [busLoading, setBusLoading] = useState(false);
+  const [busLoadError, setBusLoadError] = useState("");
 
-  const loadBuses = async () => {
-    setBusLoading(true);
-    setBusLoadError("");
+  const toggleLanguage = () => {
+    const next = !isHindi;
+    setIsHindi(next);
+    localStorage.setItem("bussinn_lang", next ? "hi" : "en");
+  };
 
-    try {
-      const { data, error } = await supabase
-  .from("buses")
-  .select(`
-    *,
-    bus_schedule (
-      id,
-      stop_order,
-      station_name,
-      arrival_time,
-      departure_time
-    )
-  `)
-  .eq("is_active", true);
+  useEffect(() => {
+    let cancelled = false;
 
-if (error) throw error;
+    const loadBuses = async () => {
+      setBusLoading(true);
+      setBusLoadError("");
 
-const scheduledBuses = (data || []).map((bus) => ({
-  ...bus,
-  bus_schedule: [...(bus.bus_schedule || [])].sort(
-    (a, b) => Number(a.stop_order) - Number(b.stop_order)
-  ),
-}));
-if (!cancelled) setBuses(scheduledBuses);
-    } catch (err) {
-      console.error("Unable to load buses:", err);
-      if (!cancelled) {
-        setBusLoadError("Unable to load buses. Please try again.");
+      try {
+        const { data, error } = await supabase
+          .from("buses")
+          .select(`
+            *,
+            bus_schedule (
+              id,
+              stop_order,
+              station_name,
+              arrival_time,
+              departure_time
+            )
+          `)
+          .eq("is_active", true);
+
+        if (error) throw error;
+
+        const scheduledBuses = (data || []).map((bus) => ({
+          ...bus,
+          bus_schedule: [...(bus.bus_schedule || [])].sort(
+            (a, b) => Number(a.stop_order) - Number(b.stop_order)
+          ),
+        }));
+
+        if (!cancelled) setBuses(scheduledBuses);
+      } catch (err) {
+        console.error("Unable to load buses:", err);
+
+        if (!cancelled) {
+          setBusLoadError(
+            err?.message || "Unable to load buses. Please try again."
+          );
+        }
+      } finally {
+        if (!cancelled) setBusLoading(false);
       }
-    } finally {
-      if (!cancelled) setBusLoading(false);
+    };
+
+    loadBuses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const departureSuggestions = useMemo(
+    () =>
+      activeLocationField === "departure"
+        ? getLocationSuggestions(departurePoint)
+        : [],
+    [activeLocationField, departurePoint]
+  );
+
+  const destinationSuggestions = useMemo(
+    () =>
+      activeLocationField === "destination"
+        ? getLocationSuggestions(destinationPoint)
+        : [],
+    [activeLocationField, destinationPoint]
+  );
+
+  const matchedBuses = useMemo(
+    () =>
+      findBusMatches(
+        buses,
+        departurePoint,
+        destinationPoint,
+        startTime,
+        endTime
+      ),
+    [buses, departurePoint, destinationPoint, startTime, endTime]
+  );
+
+  const selectLocation = (field, location) => {
+    if (field === "departure") {
+      setDeparturePoint(location.name);
+    } else {
+      setDestinationPoint(location.name);
     }
+
+    setActiveLocationField(null);
+    setSelectedBusId(null);
+    setError("");
   };
 
-  loadBuses();
-
-  return () => {
-    cancelled = true;
-  };
-}, []);
-
-const departureSuggestions = useMemo(
-  () =>
-    activeLocationField === "departure"
-      ? getLocationSuggestions(departurePoint)
-      : [],
-  [activeLocationField, departurePoint]
-);
-
-const destinationSuggestions = useMemo(
-  () =>
-    activeLocationField === "destination"
-      ? getLocationSuggestions(destinationPoint)
-      : [],
-  [activeLocationField, destinationPoint]
-);
-
-const matchedBuses = useMemo(
-  () =>
-    findBusMatches(
-      buses,
-      departurePoint,
-      destinationPoint,
-      startTime,
-      endTime
-    ),
-  [buses, departurePoint, destinationPoint, startTime, endTime]
-);
-
-const selectLocation = (field, location) => {
-  if (field === "departure") {
-    setDeparturePoint(location.name);
-  } else {
-    setDestinationPoint(location.name);
-  }
-
-  setActiveLocationField(null);
-  setError("");
-};
-
-  // Translation Dictionary
   const content = {
     en: {
       title: "Driver Setup",
@@ -233,445 +258,325 @@ const selectLocation = (field, location) => {
       departurePlaceholder: "Starts from...",
       destinationLabel: "Destination Point",
       destinationPlaceholder: "Ends at...",
-      stopsLabel: "Bus Route / Stops",
-      stopsHint: "(e.g., places where the bus usually stops)",
-      stopPlaceholder: "Search or enter stop...",
-      addStopBtn: "+ Add Stop",
       startTimeLabel: "Shift Start Time",
       endTimeLabel: "Shift End Time",
       continueBtn: "Continue",
-      errorMsg: "Please fill in all details and route stops to continue.",
-      note: "Note: Continue is only available within ±30 minutes of your scheduled start time."
+      errorMsg:
+        "Please enter your departure, destination, and shift times.",
+      note:
+        "Choose a bus whose scheduled departure and arrival are within ±10 minutes of your entered times.",
     },
     hi: {
       title: "ड्राइवर सेटअप",
-      subtitle: "अपनी शिफ्ट शुरू करने से पहले अपने मार्ग का विवरण कॉन्फ़िगर करें।",
+      subtitle: "अपनी शिफ्ट शुरू करने से पहले मार्ग का विवरण भरें।",
       departureLabel: "प्रस्थान बिंदु",
       departurePlaceholder: "यहाँ से शुरू करें...",
       destinationLabel: "गंतव्य बिंदु",
       destinationPlaceholder: "यहाँ समाप्त करें...",
-      stopsLabel: "बस मार्ग / स्टॉप",
-      stopsHint: "(उदाहरण: वे स्थान जहाँ बस आमतौर पर रुकती है)",
-      stopPlaceholder: "स्टॉप खोजें या दर्ज करें...",
-      addStopBtn: "+ स्टॉप जोड़ें",
       startTimeLabel: "शिफ्ट शुरू होने का समय",
       endTimeLabel: "शिफ्ट समाप्त होने का समय",
       continueBtn: "जारी रखें",
-      errorMsg: "कृपया आगे बढ़ने के लिए सभी विवरण और मार्ग स्टॉप भरें।",
-      note: "नोट: जारी रखें केवल आपके निर्धारित समय से ±30 मिनट के भीतर उपलब्ध है।"
-    }
+      errorMsg: "कृपया शुरुआती स्थान, गंतव्य और शिफ्ट का समय भरें।",
+      note:
+        "बस का निर्धारित समय आपके दर्ज किए गए समय से ±10 मिनट के भीतर होना चाहिए।",
+    },
   };
 
   const t = isHindi ? content.hi : content.en;
 
-  // Stop Handlers
-  const handleAddStop = () => {
-    setStops([...stops, ""]);
-    if (error) setError("");
-  };
-
-  const handleStopChange = (index, value) => {
-    const newStops = [...stops];
-    newStops[index] = value;
-    setStops(newStops);
-    if (error) setError("");
-  };
-
-  const handleRemoveStop = (index) => {
-    const newStops = stops.filter((_, i) => i !== index);
-    setStops(newStops);
-  };
-
   const handleContinue = () => {
-    // Validation: Check if main fields are filled
-    if (!departurePoint.trim() || !destinationPoint.trim() || !startTime || !endTime) {
+    if (
+      !departurePoint.trim() ||
+      !destinationPoint.trim() ||
+      !startTime ||
+      !endTime
+    ) {
       setError(t.errorMsg);
       return;
     }
 
+    if (getMinutes(startTime) === getMinutes(endTime)) {
+      setError("Shift start and end times cannot be identical.");
+      return;
+    }
 
-   
-setError("");
+    const matchedBus = matchedBuses.find(
+      (bus) => String(bus.id) === String(selectedBusId)
+    );
 
-const matchedBus = matchedBuses.find(
-  (bus) => bus.id === selectedBusId
-);
-
-if (!matchedBus) {
-  setError("Please select a matching bus before continuing.");
-  return;
-}
-
-// Save configuration data for the dashboard
-
-    console.log("Selected bus ID:", selectedBusId);
-console.log("Available matching bus IDs:", matchedBuses.map((bus) => bus.id));
-console.log("Matched bus:", matchedBus);
+    if (!matchedBus) {
+      setError("Please select a matching bus before continuing.");
+      return;
+    }
 
     const driverRouteData = {
       driverName: localStorage.getItem("bussinn_signup_name") || "Driver",
       departure: departurePoint,
       destination: destinationPoint,
-      stops: stops.filter(s => s.trim() !== ""),
-      startTime: startTime,
-      endTime: endTime,
+      startTime,
+      endTime,
       routeCode: "RTE-" + Math.floor(10 + Math.random() * 90) + "A",
-      selectedBus: matchedBus
-        ? {
-            id: matchedBus.id,
-            name:
-              matchedBus.name ||
-              matchedBus.bus_name ||
-              matchedBus.bus_number ||
-              "Bus",
-            source: matchedBus.source || matchedBus.matchedDeparture,
-            destination:
-              matchedBus.destination || matchedBus.matchedDestination,
-            stops: matchedBus.stops || matchedBus.routeStops || [],
-           departureTime:
-  matchedBus.matchedDepartureTime ||
-  matchedBus.departure_time ||
-  null,
-
-arrivalTime:
-  matchedBus.matchedArrivalTime ||
-  matchedBus.arrival_time ||
-  null,
-            scheduleVerified: matchedBus.scheduleVerified === true,
-          }
-        : null,
-
+      selectedBus: {
+        id: matchedBus.id,
+        name:
+          matchedBus.name ||
+          matchedBus.bus_name ||
+          matchedBus.bus_number ||
+          "Bus",
+        source: matchedBus.matchedDeparture,
+        destination: matchedBus.matchedDestination,
+        stops: matchedBus.stops,
+        departureTime: matchedBus.matchedDepartureTime,
+        arrivalTime: matchedBus.matchedArrivalTime,
+        scheduleVerified: matchedBus.scheduleVerified,
+      },
     };
 
-    localStorage.setItem("driver_route_config", JSON.stringify(driverRouteData));
+    localStorage.setItem(
+      "driver_route_config",
+      JSON.stringify(driverRouteData)
+    );
 
     navigate({ to: "/driver/dashboard" });
+  };
+
+  const renderSuggestions = (field, suggestions) => {
+    const query =
+      field === "departure" ? departurePoint : destinationPoint;
+
+    if (activeLocationField !== field || !query.trim()) return null;
+
+    return (
+      <ul className="driver-location-suggestions">
+        {suggestions.length > 0 ? (
+          suggestions.map((location) => (
+            <li key={`${field}-${location.name}`}>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => selectLocation(field, location)}
+              >
+                <MapPin size={16} />
+                <span>
+                  <strong>{location.name}</strong>
+                  <small>
+                    {location.district}, {location.state}
+                  </small>
+                </span>
+              </button>
+            </li>
+          ))
+        ) : (
+          <li className="driver-no-suggestions">
+            No matching locations found.
+          </li>
+        )}
+      </ul>
+    );
   };
 
   return (
     <div className="mobile-page-container">
       <div className="app-content driver-layout">
-
-        {/* Top Navigation */}
         <header className="driver-header">
           <div className="brand-info">
-            <svg className="bus-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
-            </svg>
+            <BusFront size={26} />
             <span className="brand-name">BussInn</span>
           </div>
 
-          {/* Global Language Toggle Button */}
           <button
+            type="button"
             className="btn-lang-pill"
             onClick={toggleLanguage}
             title="Change Language"
           >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="icon-small">
-              <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" />
-            </svg>
             EN / HI
           </button>
         </header>
 
-        {/* Setup Card */}
         <div className="setup-card">
           <div className="card-header">
             <div className="icon-badge">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 18a2 2 0 100-4 2 2 0 000 4z" />
-                <path d="M18 10a2 2 0 100-4 2 2 0 000 4z" />
-                <path d="M6 14V8a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 002 2h2" />
-              </svg>
+              <MapPin size={24} />
             </div>
             <h1 className="card-title">{t.title}</h1>
             <p className="card-subtitle">{t.subtitle}</p>
           </div>
 
-          <form className="setup-form" onSubmit={(e) => e.preventDefault()}>
+          <form
+            className="setup-form"
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <div className="form-group">
+              <label className="form-label">{t.departureLabel}</label>
 
-           {/* Departure Point */}
-<div className="form-group">
-  <label className="form-label">{t.departureLabel}</label>
-
-  <div className="input-box">
-    <svg className="input-icon" viewBox="0 0 24 24">
-      <circle
-        cx="12"
-        cy="12"
-        r="5"
-        stroke="#ff9800"
-        strokeWidth="3"
-        fill="none"
-      />
-    </svg>
-
-    <input
-      type="text"
-      placeholder={t.departurePlaceholder}
-      value={departurePoint}
-      onFocus={() => setActiveLocationField("departure")}
-      onChange={(e) => {
-        setDeparturePoint(e.target.value);
-        setActiveLocationField("departure");
-        setError("");
-      }}
-    />
-  </div>
-
-  {activeLocationField === "departure" && departurePoint.trim() && (
-    <ul className="driver-location-suggestions">
-      {departureSuggestions.length > 0 ? (
-        departureSuggestions.map((location) => (
-          <li key={location.name}>
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => selectLocation("departure", location)}
-            >
-              <MapPin size={16} />
-              <span>
-                <strong>{location.name}</strong>
-                <small>
-                  {location.district}, {location.state}
-                </small>
-              </span>
-            </button>
-          </li>
-        ))
-      ) : (
-        <li className="driver-no-suggestions">
-          No matching locations found.
-        </li>
-      )}
-    </ul>
-  )}
-</div>
-            {/* Dynamic Stops Section */}
-            <div className="form-group stops-section">
-              <div className="stops-header">
-                <label className="form-label">
-                  {t.stopsLabel} <span className="stops-hint">{t.stopsHint}</span>
-                </label>
+              <div className="input-box">
+                <MapPin className="input-icon" size={20} />
+                <input
+                  type="text"
+                  placeholder={t.departurePlaceholder}
+                  value={departurePoint}
+                  onFocus={() => setActiveLocationField("departure")}
+                  onChange={(event) => {
+                    setDeparturePoint(event.target.value);
+                    setActiveLocationField("departure");
+                    setSelectedBusId(null);
+                    setError("");
+                  }}
+                />
               </div>
 
-              <div className="stops-list">
-                {stops.map((stop, index) => (
-                  <div key={index} className="stop-item">
-                    <div className="stop-node"></div>
-                    <div className="input-box stop-input-box">
-                      <input
-                        type="text"
-                        placeholder={t.stopPlaceholder}
-                        value={stop}
-                        onChange={(e) => handleStopChange(index, e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn-remove-stop"
-                        onClick={() => handleRemoveStop(index)}
-                        title="Remove Stop"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button type="button" className="btn-add-stop" onClick={handleAddStop}>
-                {t.addStopBtn}
-              </button>
+              {renderSuggestions("departure", departureSuggestions)}
             </div>
 
-           {/* Destination Point */}
-<div className="form-group">
-  <label className="form-label">{t.destinationLabel}</label>
+            <div className="form-group">
+              <label className="form-label">{t.destinationLabel}</label>
 
-  <div className="input-box">
-    <svg
-      className="input-icon"
-      viewBox="0 0 24 24"
-      fill="#d32f2f"
-    >
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-    </svg>
+              <div className="input-box">
+                <MapPin className="input-icon" size={20} />
+                <input
+                  type="text"
+                  placeholder={t.destinationPlaceholder}
+                  value={destinationPoint}
+                  onFocus={() => setActiveLocationField("destination")}
+                  onChange={(event) => {
+                    setDestinationPoint(event.target.value);
+                    setActiveLocationField("destination");
+                    setSelectedBusId(null);
+                    setError("");
+                  }}
+                />
+              </div>
 
-    <input
-      type="text"
-      placeholder={t.destinationPlaceholder}
-      value={destinationPoint}
-      onFocus={() => setActiveLocationField("destination")}
-      onChange={(e) => {
-        setDestinationPoint(e.target.value);
-        setActiveLocationField("destination");
-        setError("");
-      }}
-    />
-  </div>
-
-  {activeLocationField === "destination" && destinationPoint.trim() && (
-    <ul className="driver-location-suggestions">
-      {destinationSuggestions.length > 0 ? (
-        destinationSuggestions.map((location) => (
-          <li key={location.name}>
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => selectLocation("destination", location)}
-            >
-              <MapPin size={16} />
-              <span>
-                <strong>{location.name}</strong>
-                <small>
-                  {location.district}, {location.state}
-                </small>
-              </span>
-            </button>
-          </li>
-        ))
-      ) : (
-        <li className="driver-no-suggestions">
-          No matching locations found.
-        </li>
-      )}
-    </ul>
-  )}
-</div>
+              {renderSuggestions("destination", destinationSuggestions)}
+            </div>
 
             <div className="time-group">
-              {/* Start Time */}
               <div className="form-group flex-1">
                 <label className="form-label">{t.startTimeLabel}</label>
                 <div className="input-box">
-                  <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="#5f6368" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 6v6l4 2" />
-                  </svg>
                   <input
                     type="time"
                     value={startTime}
-                    onChange={(e) => { setStartTime(e.target.value); setError(""); }}
+                    onChange={(event) => {
+                      setStartTime(event.target.value);
+                      setSelectedBusId(null);
+                      setError("");
+                    }}
                   />
                 </div>
               </div>
 
-              {/* End Time */}
               <div className="form-group flex-1">
                 <label className="form-label">{t.endTimeLabel}</label>
                 <div className="input-box">
-                  <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="#5f6368" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 6v6l3 3" />
-                  </svg>
                   <input
                     type="time"
                     value={endTime}
-                    onChange={(e) => { setEndTime(e.target.value); setError(""); }}
+                    onChange={(event) => {
+                      setEndTime(event.target.value);
+                      setSelectedBusId(null);
+                      setError("");
+                    }}
                   />
                 </div>
               </div>
             </div>
+
             {departurePoint.trim() &&
-  destinationPoint.trim() &&
-  startTime &&
-  endTime && (
-    <section className="driver-bus-matches" aria-live="polite">
-      <h2>Matching Buses</h2>
+              destinationPoint.trim() &&
+              startTime &&
+              endTime && (
+                <section
+                  className="driver-bus-matches"
+                  aria-live="polite"
+                >
+                  <h2>Matching Buses</h2>
 
-      {busLoading && <p>Loading buses...</p>}
+                  {busLoading && <p>Loading buses...</p>}
 
-      {busLoadError && (
-        <p className="setup-error">{busLoadError}</p>
-      )}
+                  {busLoadError && (
+                    <p className="setup-error">{busLoadError}</p>
+                  )}
 
-      {!busLoading &&
-        !busLoadError &&
-        matchedBuses.length === 0 && (
-          <p>
-            No matching buses found. Check the route, shift time, and
-            available bus schedules.
-          </p>
-        )}
+                  {!busLoading &&
+                    !busLoadError &&
+                    matchedBuses.length === 0 && (
+                      <p>
+                        No matching buses found. Check the route, times, and
+                        Supabase schedules.
+                      </p>
+                    )}
 
-      {matchedBuses.map((bus) => (
-        <article
-  className={`driver-match-card ${
-    selectedBusId === bus.id ? "selected" : ""
-  }`}
-  key={bus.id}
-  onClick={() => setSelectedBusId(bus.id)}
-  role="button"
-  tabIndex={0}
-  onKeyDown={(event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      setSelectedBusId(bus.id);
-    }
-  }}
-  aria-pressed={selectedBusId === bus.id}
->
-          <div className="driver-match-title">
-            <BusFront size={22} />
+                  {matchedBuses.map((bus) => (
+                    <article
+                      key={bus.id}
+                      className={`driver-match-card ${
+                        String(selectedBusId) === String(bus.id)
+                          ? "selected"
+                          : ""
+                      }`}
+                      onClick={() => setSelectedBusId(bus.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Enter" ||
+                          event.key === " "
+                        ) {
+                          event.preventDefault();
+                          setSelectedBusId(bus.id);
+                        }
+                      }}
+                      aria-pressed={
+                        String(selectedBusId) === String(bus.id)
+                      }
+                    >
+                      <div className="driver-match-title">
+                        <BusFront size={22} />
+                        <div>
+                          <strong>
+                            {bus.name || bus.bus_number || "Bus"}
+                          </strong>
+                          <small>{bus.operator || "UPSRTC"}</small>
+                        </div>
+                      </div>
 
-            <div>
-              <strong>
-                {bus.name || bus.bus_number || "Bus"}
-              </strong>
-              <small>
-                {bus.operator || "Bus operator not listed"}
-              </small>
-            </div>
-          </div>
+                      <p>
+                        {bus.matchedDeparture} → {bus.matchedDestination}
+                      </p>
 
-          <p>
-            {bus.matchedDeparture} → {bus.matchedDestination}
-          </p>
+                      <p>
+                        {bus.matchedDepartureTime} –{" "}
+                        {bus.matchedArrivalTime}
+                      </p>
 
-          {bus.scheduleVerified ? (
-            <p>
-              {bus.matchedDepartureTime} – {bus.matchedArrivalTime}
-            </p>
-          ) : (
-            <p className="driver-schedule-warning">
-              Route matches, but schedule times could not be verified.
-            </p>
-          )}
-          {selectedBusId === bus.id && (
-  <p className="selected-bus-label">Selected bus</p>
-)}
-        </article>
-      ))}
-    </section>
-  )}
+                      {String(selectedBusId) === String(bus.id) && (
+                        <p className="selected-bus-label">
+                          Selected bus
+                        </p>
+                      )}
+                    </article>
+                  ))}
+                </section>
+              )}
 
             {error && <p className="setup-error">{error}</p>}
 
-            <button type="button" className="action-btn" onClick={handleContinue}>
-              <svg viewBox="0 0 24 24" fill="currentColor" className="play-icon">
-                <path d="M8 5v14l11-7z" />
-              </svg>
+            <button
+              type="button"
+              className="action-btn"
+              onClick={handleContinue}
+            >
               {t.continueBtn}
             </button>
 
-            <p className="footer-note">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 16v-4" />
-                <path d="M12 8h.01" />
-              </svg>
-              {t.note}
-            </p>
-
+            <p className="footer-note">{t.note}</p>
           </form>
         </div>
-
       </div>
     </div>
-    );
+  );
 };
 
 export default DriverSetup;

@@ -5,68 +5,23 @@ import "../../styles/DriverDashboard.css";
 
 const DriverDashboard = () => {
   const navigate = useNavigate();
-const [LiveBusMapComponent, setLiveBusMapComponent] = useState(null);
 
-useEffect(() => {
-  import("../../components/LiveBusMap").then((module) => {
-    setLiveBusMapComponent(() => module.default);
-  });
-}, []);
-  const [driverLocation, setDriverLocation] = useState({
-  latitude: 28.6139,
-  longitude: 77.2090,
-});
-
-useEffect(() => {
-  if (!navigator.geolocation) {
-    console.log("Geolocation is not supported");
-    return;
-  }
-
-  const watchId = navigator.geolocation.watchPosition(
-    (position) => {
-      setDriverLocation({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
-    },
-    (error) => {
-      console.log("Location error:", error);
-    },
-    {
-      enableHighAccuracy: true,
-      maximumAge: 5000,
-      timeout: 10000,
-    }
-  );
-
-  return () => navigator.geolocation.clearWatch(watchId);
-}, []);
-
-  // 1. Global Language State
   const [isHindi, setIsHindi] = useState(false);
 
-useEffect(() => {
-  const savedLanguage = localStorage.getItem("bussinn_lang");
-  setIsHindi(savedLanguage === "hi");
-}, []);
-
-  const toggleLanguage = () => {
-    const newLangState = !isHindi;
-    setIsHindi(newLangState);
-    localStorage.setItem("bussinn_lang", newLangState ? "hi" : "en");
-  };
-
-  // 2. Load Driver Route Data & Name directly on initial render (Prevents reload shift)
   const [routeDetails, setRouteDetails] = useState({
-  departure: "Central Station",
-  destination: "North Terminal",
-  stops: [],
-  startTime: "08:00",
-  endTime: "16:00",
-  routeCode: "RTE-42A",
-  driverName: "Driver",
-});
+    departure: "Central Station",
+    destination: "North Terminal",
+    stops: [],
+    startTime: "08:00",
+    endTime: "16:00",
+    routeCode: "RTE-42A",
+    driverName: "Driver",
+  });
+
+  useEffect(() => {
+    const savedLanguage = localStorage.getItem("bussinn_lang");
+    setIsHindi(savedLanguage === "hi");
+  }, []);
 
   useEffect(() => {
     try {
@@ -77,9 +32,7 @@ useEffect(() => {
       setRouteDetails((current) => ({
         ...current,
         ...parsedConfig,
-        stops: Array.isArray(parsedConfig.stops)
-          ? parsedConfig.stops
-          : [],
+        stops: Array.isArray(parsedConfig.stops) ? parsedConfig.stops : [],
       }));
     } catch (error) {
       console.error("Failed to load driver route configuration:", error);
@@ -97,18 +50,18 @@ useEffect(() => {
   const displayEndTime =
     routeDetails.selectedBus?.arrivalTime || routeDetails.endTime;
 
-  const [timeError, setTimeError] = useState("");
+  const toggleLanguage = () => {
+    const newLangState = !isHindi;
+    setIsHindi(newLangState);
+    localStorage.setItem("bussinn_lang", newLangState ? "hi" : "en");
+  };
 
-  // Translation Dictionary
   const content = {
     en: {
       greeting: `Welcome, ${routeDetails.driverName}`,
       subtitle: "Ready for your shift? Your custom route configuration is active.",
       startTrip: "Start Trip",
-      endTrip: "End Trip",
       currentRoute: "CUSTOM ROUTE",
-      live: "Live",
-      ready: "Ready",
       startTime: "Start Time",
       endTime: "End Time",
       totalStops: "Total Stops",
@@ -122,16 +75,14 @@ useEffect(() => {
       firstStop: "Starts from:",
       intermediateStop: "Intermediate Stop",
       endRoute: "Route Destination",
-      finalStop: "Ends at:"
+      finalStop: "Ends at:",
+      ready: "Ready",
     },
     hi: {
       greeting: `स्वागत है, ${routeDetails.driverName}`,
       subtitle: "क्या आप अपनी शिफ्ट के लिए तैयार हैं? आपका कस्टम मार्ग सक्रिय है।",
       startTrip: "यात्रा शुरू करें",
-      endTrip: "यात्रा समाप्त करें",
       currentRoute: "कस्टम मार्ग",
-      live: "लाइव",
-      ready: "तैयार",
       startTime: "शुरू होने का समय",
       endTime: "समाप्त होने का समय",
       totalStops: "कुल स्टॉप",
@@ -145,26 +96,28 @@ useEffect(() => {
       firstStop: "यहाँ से शुरू:",
       intermediateStop: "मध्यवर्ती स्टॉप",
       endRoute: "मार्ग गंतव्य",
-      finalStop: "यहाँ समाप्त:"
-    }
+      finalStop: "यहाँ समाप्त:",
+      ready: "तैयार",
+    },
   };
 
   const t = isHindi ? content.hi : content.en;
 
   const handleTripToggle = () => {
-    // Set flag so coins can be triggered when ending trip later
     localStorage.setItem("trigger_coin_reward", "pending");
+    localStorage.setItem(
+      "shift_start_proof",
+      JSON.stringify({ at: Date.now(), gateEnabled: false })
+    );
     navigate({ to: "/driver/live-tracking" });
   };
 
   return (
     <div className="mobile-page-container">
       <div className="app-content dashboard-layout">
-        
-        {/* Header with Global Language Toggle */}
         <header className="dash-header">
           <h1 className="brand-title">BussInn</h1>
-          <button 
+          <button
             className="btn-lang-pill"
             onClick={toggleLanguage}
             title="Change Language"
@@ -176,20 +129,12 @@ useEffect(() => {
           </button>
         </header>
 
-        {/* Scrollable Content Area */}
         <main className="dash-content">
-          
-          {/* Welcome & Action Card */}
           <section className="welcome-card">
             <h2 className="welcome-title">{t.greeting}</h2>
             <p className="welcome-subtitle">{t.subtitle}</p>
-            
-            {timeError && <p className="error-banner">{timeError}</p>}
 
-            <button 
-              className="btn-trip"
-              onClick={handleTripToggle}
-            >
+            <button className="btn-trip" onClick={handleTripToggle}>
               <svg viewBox="0 0 24 24" fill="currentColor" className="trip-icon">
                 <path d="M8 5v14l11-7z" />
               </svg>
@@ -197,22 +142,27 @@ useEffect(() => {
             </button>
           </section>
 
-          {/* Configured Route Details Card */}
           <section className="info-card route-details-card">
-            <div className="card-indicator"></div>
-            
+            <div className="card-indicator" />
+
             <div className="route-card-header">
               <div>
                 <span className="label-small">{t.currentRoute}</span>
-                <h3 className="route-name">{routeDetails.departure} → {routeDetails.destination}</h3>
+                <h3 className="route-name">
+                  {routeDetails.departure} → {routeDetails.destination}
+                </h3>
                 {routeDetails.selectedBus && (
                   <p className="selected-bus-name">
-                    Bus: {routeDetails.selectedBus.name || routeDetails.selectedBus.bus_name || routeDetails.selectedBus.bus_number || "Selected bus"}
+                    Bus:{" "}
+                    {routeDetails.selectedBus.name ||
+                      routeDetails.selectedBus.bus_name ||
+                      routeDetails.selectedBus.bus_number ||
+                      "Selected bus"}
                   </p>
                 )}
               </div>
               <div className="status-badge">
-                <span className="status-dot"></span>
+                <span className="status-dot" />
                 {t.ready}
               </div>
             </div>
@@ -237,24 +187,12 @@ useEffect(() => {
             </div>
           </section>
 
-          {/* Live Bus Map */}
-<section className="info-card live-map-card">
-  {LiveBusMapComponent && (
-    <LiveBusMapComponent
-      latitude={driverLocation.latitude}
-      longitude={driverLocation.longitude}
-      busNumber="Bus"
-    />
-  )}
-</section>
-
-          {/* Quick Stats Row */}
           <section className="quick-stats-row">
             <div className="quick-stat-card">
               <div className="stat-icon-circle bg-orange-light">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#f57c00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
                 </svg>
               </div>
               <div className="stat-text-group">
@@ -276,7 +214,6 @@ useEffect(() => {
             </div>
           </section>
 
-          {/* Custom Stops Timeline Schedule */}
           <section className="schedule-section">
             <div className="schedule-header">
               <h3 className="section-title">{t.todaysSchedule}</h3>
@@ -290,7 +227,7 @@ useEffect(() => {
                 </div>
                 <div className="timeline-node bg-blue-light">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="text-primary">
-                     <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/>
+                    <path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z" />
                   </svg>
                 </div>
                 <div className="timeline-content">
@@ -306,12 +243,14 @@ useEffect(() => {
                   </div>
                   <div className="timeline-node bg-gray-light">
                     <svg viewBox="0 0 24 24" fill="currentColor" className="text-gray">
-                      <circle cx="12" cy="12" r="6"/>
+                      <circle cx="12" cy="12" r="6" />
                     </svg>
                   </div>
                   <div className="timeline-content">
                     <h4 className="timeline-title">{t.intermediateStop}</h4>
-                    <p className="timeline-desc">{typeof stop === "string" ? stop : stop.station_name || stop.name || "Stop"}</p>
+                    <p className="timeline-desc">
+                      {typeof stop === "string" ? stop : stop.station_name || stop.name || "Stop"}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -322,7 +261,7 @@ useEffect(() => {
                 </div>
                 <div className="timeline-node bg-gray-light">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="text-gray">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
                   </svg>
                 </div>
                 <div className="timeline-content">
@@ -330,16 +269,13 @@ useEffect(() => {
                   <p className="timeline-desc">{t.finalStop} {routeDetails.destination}</p>
                 </div>
               </div>
-
             </div>
           </section>
-
         </main>
-        
-        <div className="bottom-nav-placeholder">
-           <DriverBottomNav />
-        </div>
 
+        <div className="bottom-nav-placeholder">
+          <DriverBottomNav />
+        </div>
       </div>
     </div>
   );

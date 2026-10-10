@@ -22,6 +22,7 @@ import {
 
 import { supabase } from "../../lib/supabase";
 import PassengerBottomNav from "../../components/PassengerBottomNav";
+import BusTrackingMap from "./BusTrackingMap";
 import "../../styles/PassengerLiveTracking.css";
 
 // Bus icons
@@ -932,47 +933,11 @@ export default function PassengerLiveTracking() {
       </header>
 
       <main className="live-track-content">
-        <section
+        <BusTrackingMap
+          busId="demo-bus"
+          scheduleStops={scheduleStops}
           className="live-map-placeholder"
-          aria-label="Map placeholder"
-        >
-          <div className="live-map-grid" />
-          <div className="live-map-road live-map-road-a" />
-          <div className="live-map-road live-map-road-b" />
-          <div className="live-map-route" />
-
-          {scheduleStops.map((stop, index) => (
-            <div
-              key={`${stop.id || stop.station_name}-${index}`}
-              className={`live-map-stop ${
-                index <= activeStopIndex
-                  ? "is-reached"
-                  : ""
-              }`}
-              style={{
-                left: `${
-                  10 +
-                  index *
-                    (80 /
-                      Math.max(
-                        scheduleStops.length - 1,
-                        1
-                      ))
-                }%`,
-              }}
-              title={stop.station_name}
-            />
-          ))}
-
-          <div className="live-map-placeholder-label">
-            <Navigation size={14} />
-            Map integration coming soon
-          </div>
-
-          <div className="live-map-bus-marker">
-            <img src={busImage} alt="Bus" />
-          </div>
-        </section>
+        />
 
         <section className="live-track-sheet">
           <div className="live-bus-summary">

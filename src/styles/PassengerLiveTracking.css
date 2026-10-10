@@ -1049,4 +1049,25 @@
   color: #111827;
   overflow: hidden;
   text-overflow: ellipsis;
+}.passenger-live-map.live-map-placeholder {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 380px;
+  min-height: 380px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.passenger-live-map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.passenger-live-map-canvas .maplibregl-canvas-container,
+.passenger-live-map-canvas .maplibregl-canvas {
+  width: 100% !important;
+  height: 100% !important;
 }

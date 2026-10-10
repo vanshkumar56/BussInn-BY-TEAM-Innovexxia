@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import DriverBottomNav from "../../components/DriverBottomNav";
+import DriverBottomNav from "./DriverBottomNav";
 import LiveBusMap from "../../components/LiveBusMap";
 import { useShiftGate } from "../../hooks/useShiftGate";
 import "../../styles/DriverDashboard.css";

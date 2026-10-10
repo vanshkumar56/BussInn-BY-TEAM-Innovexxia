@@ -67,9 +67,35 @@ useEffect(() => {
   routeCode: "RTE-42A",
   driverName: "Driver",
 });
-    
-    
-    
+
+  useEffect(() => {
+    try {
+      const savedConfig = localStorage.getItem("driver_route_config");
+      if (!savedConfig) return;
+
+      const parsedConfig = JSON.parse(savedConfig);
+      setRouteDetails((current) => ({
+        ...current,
+        ...parsedConfig,
+        stops: Array.isArray(parsedConfig.stops)
+          ? parsedConfig.stops
+          : [],
+      }));
+    } catch (error) {
+      console.error("Failed to load driver route configuration:", error);
+    }
+  }, []);
+
+  const routeStops =
+    routeDetails.selectedBus?.stops?.length > 0
+      ? routeDetails.selectedBus.stops
+      : routeDetails.stops || [];
+
+  const displayStartTime =
+    routeDetails.selectedBus?.departureTime || routeDetails.startTime;
+
+  const displayEndTime =
+    routeDetails.selectedBus?.arrivalTime || routeDetails.endTime;
 
   const [timeError, setTimeError] = useState("");
 
@@ -179,6 +205,11 @@ useEffect(() => {
               <div>
                 <span className="label-small">{t.currentRoute}</span>
                 <h3 className="route-name">{routeDetails.departure} → {routeDetails.destination}</h3>
+                {routeDetails.selectedBus && (
+                  <p className="selected-bus-name">
+                    Bus: {routeDetails.selectedBus.name || routeDetails.selectedBus.bus_name || routeDetails.selectedBus.bus_number || "Selected bus"}
+                  </p>
+                )}
               </div>
               <div className="status-badge">
                 <span className="status-dot"></span>
@@ -189,15 +220,15 @@ useEffect(() => {
             <div className="stats-grid">
               <div className="stat-box">
                 <span className="stat-label">{t.startTime}</span>
-                <span className="stat-value text-primary">{routeDetails.startTime}</span>
+                <span className="stat-value text-primary">{displayStartTime}</span>
               </div>
               <div className="stat-box">
                 <span className="stat-label">{t.endTime}</span>
-                <span className="stat-value">{routeDetails.endTime}</span>
+                <span className="stat-value">{displayEndTime}</span>
               </div>
               <div className="stat-box">
                 <span className="stat-label">{t.totalStops}</span>
-                <span className="stat-value text-tertiary">{(routeDetails.stops?.length || 0) + 2}</span>
+                <span className="stat-value text-tertiary">{routeStops.length + 2}</span>
               </div>
               <div className="stat-box">
                 <span className="stat-label">{t.routeCode}</span>
@@ -255,7 +286,7 @@ useEffect(() => {
             <div className="timeline">
               <div className="timeline-item">
                 <div className="time-block">
-                  <span className="time">{routeDetails.startTime}</span>
+                  <span className="time">{displayStartTime}</span>
                 </div>
                 <div className="timeline-node bg-blue-light">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="text-primary">
@@ -268,7 +299,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              {routeDetails.stops && routeDetails.stops.map((stopName, idx) => (
+              {routeStops.map((stop, idx) => (
                 <div className="timeline-item" key={idx}>
                   <div className="time-block">
                     <span className="time">Stop {idx + 1}</span>
@@ -280,14 +311,14 @@ useEffect(() => {
                   </div>
                   <div className="timeline-content">
                     <h4 className="timeline-title">{t.intermediateStop}</h4>
-                    <p className="timeline-desc">{stopName}</p>
+                    <p className="timeline-desc">{typeof stop === "string" ? stop : stop.station_name || stop.name || "Stop"}</p>
                   </div>
                 </div>
               ))}
 
               <div className="timeline-item">
                 <div className="time-block">
-                  <span className="time">{routeDetails.endTime}</span>
+                  <span className="time">{displayEndTime}</span>
                 </div>
                 <div className="timeline-node bg-gray-light">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="text-gray">

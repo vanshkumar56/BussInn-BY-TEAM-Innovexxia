@@ -50,48 +50,119 @@
   }
 }
 
-.dash-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 16px;
-  background-color: var(--surface-card);
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  border-bottom: 1px solid var(--surface-container-highest);
-  width: 100%;
+/* =========================================
+   Blue Header (Matches Rewards/Profile)
+   ========================================= */
+.refer-blue-header {
+  position: relative;
+  padding: 21px 18px 24px;
+  overflow: hidden;
+  border-radius: 0 0 28px 28px;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.2), transparent 30%),
+    linear-gradient(140deg, #003b9f 0%, #0051cc 55%, #0870f9 100%);
+  color: #ffffff;
   flex-shrink: 0;
 }
 
-.brand-title {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--primary);
-  margin: 0;
+.refer-blue-header::before {
+  position: absolute;
+  top: -116px;
+  right: -76px;
+  width: 250px;
+  height: 250px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 22px rgba(255, 255, 255, 0.04),
+    0 0 0 48px rgba(255, 255, 255, 0.03);
+  content: "";
 }
 
-.btn-lang-pill {
+.refer-top-bar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background-color: var(--surface-container-highest);
-  padding: 5px 10px;
-  border-radius: 9999px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--on-surface-variant);
-  border: none;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Pill Logo */
+.dash-logo-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 20px rgba(0, 30, 86, 0.16);
+  color: #004cca;
+}
+
+.dash-logo-brand svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.8;
+}
+
+.dash-logo-brand span {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+}
+
+/* Action Buttons Container */
+.refer-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Translate and Close Buttons */
+.lang-toggle-pill,
+.close-btn-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
   cursor: pointer;
+  text-decoration: none;
 }
 
-.icon-small {
-  width: 14px;
-  height: 14px;
-  color: var(--primary); 
+.lang-toggle-pill {
+  min-height: 35px;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
 }
 
+.lang-toggle-pill svg {
+  width: 15px;
+  height: 15px;
+}
+
+.close-btn-circle {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+}
+
+.close-btn-circle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* =========================================
+   Main Refer Content
+   ========================================= */
 .refer-content {
   flex: 1;
   padding: 24px 20px;

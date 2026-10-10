@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import BackButton from "../../components/BackButton";
+import { BusFront, Languages, X } from "lucide-react";
 import "../../styles/ReferEarn.css";
 
 const ReferEarn = () => {
@@ -15,12 +15,26 @@ const ReferEarn = () => {
     localStorage.setItem("bussinn_lang", newLangState ? "hi" : "en");
   };
 
-  // 2. Referral Code State (Generates a unique persistent code for the driver)
+  // 2. Referral Code State
   const [referralCode, setReferralCode] = useState("BL4FF");
   const [copied, setCopied] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
+  
+  // 3. Dynamic Routing State
+  const [closeRoute, setCloseRoute] = useState("/driver/profile"); // fallback default
 
   useEffect(() => {
+    // Check if the user is signed in as a passenger or driver
+    const isPassenger = localStorage.getItem("passenger_token") || localStorage.getItem("passenger_name");
+    
+    // Dynamically set the close route based on user type
+    if (isPassenger) {
+      setCloseRoute("/passenger/profile");
+    } else {
+      setCloseRoute("/driver/profile");
+    }
+
+    // Generate or fetch referral code
     let savedCode = localStorage.getItem("bussinn_referral_code");
     if (!savedCode) {
       savedCode = "BL" + Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -92,18 +106,34 @@ const ReferEarn = () => {
     <div className="page mobile-page-container">
       <div className="app-content refer-layout">
         
-        {/* Top Header */}
-        <header className="dash-header">
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <BackButton fallback="/driver/profile" />
+        {/* Blue Header with unified Pill actions */}
+        <header className="refer-blue-header">
+          <div className="refer-top-bar">
+            
+            {/* Logo */}
+            <div className="dash-logo-brand" aria-label="BussInn">
+              <BusFront aria-hidden="true" />
+              <span>BussInn</span>
+            </div>
+
+            {/* Actions: Translate & Close */}
+            <div className="refer-top-actions">
+              <button className="lang-toggle-pill" type="button" onClick={toggleLanguage}>
+                <Languages aria-hidden="true" />
+                EN / HI
+              </button>
+
+              {/* Dynamic Close Button */}
+              <Link
+                to={closeRoute}
+                className="close-btn-circle"
+                aria-label="Close"
+              >
+                <X aria-hidden="true" />
+              </Link>
+            </div>
+            
           </div>
-          <h1 className="brand-title">BussInn</h1>
-          <button className="btn-lang-pill" onClick={toggleLanguage}>
-            <svg viewBox="0 0 24 24" fill="currentColor" className="icon-small">
-              <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z" />
-            </svg>
-            EN / HI
-          </button>
         </header>
 
         {/* Main Refer Content */}

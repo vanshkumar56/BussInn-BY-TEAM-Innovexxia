@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useSignIn, useAuth, useUser } from "@clerk/tanstack-react-start";
+import { useSignIn, useAuth } from "@clerk/tanstack-react-start";
 import { supabase } from "../../lib/supabase";
 import "../../styles/Login.css";
 
@@ -28,16 +28,14 @@ const BussInnBrand = () => (
 const Login = () => {
   const navigate = useNavigate();
   const { signIn } = useSignIn();
-  const { isLoaded, isSignedIn, signOut } = useAuth();
-  const { user } = useUser();
-
+ const { isLoaded, isSignedIn, userId } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isHindi, setIsHindi] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionCleared, setSessionCleared] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [pendingLoginEmail, setPendingLoginEmail] = useState("");
 
   const content = {
     en: {
@@ -75,30 +73,6 @@ const Login = () => {
   };
 
   const t = isHindi ? content.hi : content.en;
-
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    if (!isSignedIn) {
-      setSessionCleared(true);
-      return;
-    }
-
-    const clearSession = async () => {
-      try {
-        await signOut();
-        window.location.reload();
-      } catch (error) {
-        console.error("Failed to clear old Clerk session:", error);
-        setErrorMessage(
-          "Unable to clear the previous session. Please refresh the page."
-        );
-      }
-    };
-
-    clearSession();
-  }, [isLoaded, isSignedIn, signOut]);
-
   const handleInputChange = (setter) => (event) => {
     setter(event.target.value);
     if (errorMessage) setErrorMessage("");
@@ -155,118 +129,103 @@ const Login = () => {
 
     throw new Error("Your account role has not been configured.");
   };
+  useEffect(() => {
+  if (!isLoaded || !isSignedIn || !userId || !pendingLoginEmail) {
+    return;
+  }
 
-  const handleLogin = async (event) => {
-    event.preventDefault();
 
-    if (isLoading) return;
 
-    setErrorMessage("");
-
-    if (!email.trim() || !password.trim()) {
-      setErrorMessage(t.emptyError);
-      return;
-    }
-
-    // Hardcoded admin shortcut: skips Clerk and opens the admin page
-    if (
-      email.trim().toLowerCase() === HARDCODED_ADMIN.email &&
-      password === HARDCODED_ADMIN.password
-    ) {
-      localStorage.setItem("bussinn_user_email", HARDCODED_ADMIN.email);
-      localStorage.setItem("bussinn_role", "admin");
-      navigate({ to: "/admin/overview", replace: true });
-      return;
-    }
-
-    if (!isLoaded || !signIn) {
-      setErrorMessage("Authentication is still loading. Please try again.");
-      return;
-    }
-
-    setIsLoading(true);
-
+  const finishLogin = async () => {
     try {
-      if (isSignedIn) {
-        try {
-          await signOut();
-        } catch (signOutError) {
-          console.error("Forced sign out failed:", signOutError);
-        }
-      }
-
-      const { error } = await signIn.password({
-        identifier: email.trim().toLowerCase(),
-        password
-      });
-
-      if (error) {
-        console.error("Clerk sign-in error:", error);
-
-        const message = error.message || "";
-        const lowerMessage = message.toLowerCase();
-
-        if (
-          lowerMessage.includes("password") ||
-          lowerMessage.includes("incorrect")
-        ) {
-          setErrorMessage("Incorrect email or password.");
-          return;
-        }
-
-        if (
-          lowerMessage.includes("not found") ||
-          lowerMessage.includes("does not exist")
-        ) {
-          setErrorMessage(t.noUserError);
-          return;
-        }
-
-        setErrorMessage(message || t.authError);
-        return;
-      }
-
-      if (signIn.status === "needs_second_factor") {
-        setErrorMessage("Additional verification is required for this account.");
-        return;
-      }
-
-      if (signIn.status === "needs_client_trust") {
-        setErrorMessage("This device needs additional verification.");
-        return;
-      }
-
-      if (signIn.status !== "complete") {
-        setErrorMessage(
-          `Unable to complete sign in. Status: ${signIn.status}`
-        );
-        return;
-      }
-
-      const finalizeResult = await signIn.finalize();
-
-      if (finalizeResult?.error) {
-        setErrorMessage(
-          finalizeResult.error.message || "Unable to complete sign in."
-        );
-        return;
-      }
-
-      const clerkUserId = user?.id;
-
-      if (!clerkUserId) {
-        window.setTimeout(() => window.location.reload(), 500);
-        return;
-      }
-
-      await routeUserByRole(clerkUserId, email.trim());
+      await routeUserByRole(userId, pendingLoginEmail);
     } catch (error) {
-      console.error("Login error:", error);
-      setErrorMessage(error?.message || "Unable to sign in. Please try again.");
-    } finally {
-      setIsLoading(false);
+      if (!cancelled) {
+        console.error("Login routing error:", error);
+        setErrorMessage(
+          error?.message || "Unable to complete login. Please try again."
+        );
+        setPendingLoginEmail("");
+      }
     }
   };
+
+  finishLogin();
+
+  return () => {
+    cancelled = true;
+  };
+}, [isLoaded, isSignedIn, userId, pendingLoginEmail]);
+
+ 
+const handleLogin = async (event) => {
+  event.preventDefault();
+
+  if (isLoading) return;
+
+  setErrorMessage("");
+
+  if (!email.trim() || !password.trim()) {
+    setErrorMessage(t.emptyError);
+    return;
+  }
+
+  if (!isLoaded || !signIn) {
+    setErrorMessage("Authentication is still loading. Please try again.");
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    const { error } = await signIn.password({
+      identifier: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (error) {
+      console.error("Clerk sign-in error:", error);
+      setErrorMessage(error.message || t.authError);
+      return;
+    }
+
+    if (signIn.status === "needs_second_factor") {
+      setErrorMessage("Additional verification is required for this account.");
+      return;
+    }
+
+    if (signIn.status === "needs_client_trust") {
+      setErrorMessage("This device needs additional verification.");
+      return;
+    }
+
+    if (signIn.status !== "complete") {
+      setErrorMessage(
+        `Unable to complete sign in. Status: ${signIn.status}`
+      );
+      return;
+    }
+
+    const finalizeResult = await signIn.finalize();
+
+    if (finalizeResult?.error) {
+      setErrorMessage(
+        finalizeResult.error.message || "Unable to complete sign in."
+      );
+      return;
+    }
+
+    setPendingLoginEmail(email.trim());
+  } catch (error) {
+    console.error("Login error:", error);
+    setErrorMessage(
+      error?.message || "Unable to sign in. Please try again."
+    );
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   if (!isLoaded) return null;
 
@@ -302,7 +261,7 @@ const Login = () => {
         </header>
 
         <div className="login-card-wrap">
-          {isSignedIn && !sessionCleared ? (
+          {false ? (
             <section className="login-card login-loading-card">
               <span className="login-loading-spinner" aria-hidden="true" />
               <h1 className="card-title">{t.clearingText}</h1>

@@ -12,7 +12,7 @@ import {
 import PassengerBottomNav from "../../components/PassengerBottomNav";
 import locations from "../../data/locations.json";
 import "../../styles/PassengerSearch.css";
-
+import PassengerChatbot from "../../components/PassengerChatbot";
 const formatDisplayDate = (date) =>
   date.toLocaleDateString("en-US", {
     weekday: "short",
@@ -373,7 +373,8 @@ const PassengerSearch = () => {
           </Link>
         </main>
 
-        <PassengerBottomNav />
+       <PassengerChatbot />
+<PassengerBottomNav />
       </section>
     </main>
   );

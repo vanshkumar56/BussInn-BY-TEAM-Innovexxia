@@ -1,0 +1,175 @@
+.passenger-chatbot {
+  position: fixed;
+  right: 18px;
+  bottom: 92px;
+  z-index: 1000;
+  font-family: var(--search-font, Arial, sans-serif);
+}
+
+.passenger-chat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #0757d5;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  box-shadow: 0 8px 24px #15376c40;
+  cursor: pointer;
+}
+
+.passenger-chat-panel {
+  position: absolute;
+  right: 0;
+  bottom: 64px;
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100vw - 28px));
+  height: min(540px, calc(100dvh - 170px));
+  overflow: hidden;
+  border: 1px solid #dce4f1;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 55px #10274735;
+}
+
+.passenger-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  background: #0757d5;
+  color: #fff;
+}
+
+.passenger-chat-header div {
+  display: grid;
+  gap: 3px;
+}
+
+.passenger-chat-header small {
+  opacity: 0.8;
+}
+
+.passenger-chat-header button,
+.passenger-chat-form button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  cursor: pointer;
+}
+
+.passenger-chat-header button {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #ffffff25;
+  color: white;
+}
+
+.passenger-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.passenger-chat-message {
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f0f4fb;
+  color: #172033;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.passenger-chat-message.user {
+  align-self: flex-end;
+  background: #0757d5;
+  color: white;
+}
+
+.passenger-chat-message p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.passenger-chat-bus {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #dce4f1;
+  border-radius: 10px;
+  background: white;
+  color: #172033;
+}
+
+.passenger-chat-bus small {
+  color: #65728a;
+}
+
+.passenger-chat-bus div {
+  display: flex;
+  gap: 7px;
+}
+
+.passenger-chat-bus button {
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: #0757d5;
+  color: white;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.passenger-chat-thinking {
+  color: #65728a;
+  font-size: 12px;
+}
+
+.passenger-chat-form {
+  display: flex;
+  gap: 8px;
+  padding: 11px;
+  border-top: 1px solid #e8edf5;
+}
+
+.passenger-chat-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #d7deeb;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.passenger-chat-form button {
+  width: 42px;
+  border-radius: 11px;
+  background: #0757d5;
+  color: white;
+}
+
+.passenger-chat-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  .passenger-chatbot {
+    right: 12px;
+    bottom: 82px;
+  }
+}

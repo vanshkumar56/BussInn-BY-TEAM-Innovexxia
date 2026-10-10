@@ -4,6 +4,12 @@ import { useSignIn, useAuth, useUser } from "@clerk/tanstack-react-start";
 import { supabase } from "../../lib/supabase";
 import "../../styles/Login.css";
 
+// Hardcoded admin shortcut (demo only, not secure)
+const HARDCODED_ADMIN = {
+  email: "flawless4keditx@gmail.com",
+  password: "BussInnn@123",
+};
+
 const BussInnBrand = () => (
   <div className="login-brand-pill" aria-label="BussInn">
     <svg
@@ -159,6 +165,17 @@ const Login = () => {
 
     if (!email.trim() || !password.trim()) {
       setErrorMessage(t.emptyError);
+      return;
+    }
+
+    // Hardcoded admin shortcut: skips Clerk and opens the admin page
+    if (
+      email.trim().toLowerCase() === HARDCODED_ADMIN.email &&
+      password === HARDCODED_ADMIN.password
+    ) {
+      localStorage.setItem("bussinn_user_email", HARDCODED_ADMIN.email);
+      localStorage.setItem("bussinn_role", "admin");
+      navigate({ to: "/admin/overview", replace: true });
       return;
     }
 

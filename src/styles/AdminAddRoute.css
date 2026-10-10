@@ -62,3 +62,150 @@
 .admin-close-btn:hover {
   background: #e4e6ea;
 }
+
+/* =========================================
+   BUSSINN — ROUTE MANAGEMENT CARD FIX
+   ========================================= */
+
+/* Header: bus name and stops badge */
+.admin-bus-card .bus-card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Bus identity section */
+.admin-bus-card .bus-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Bus icon */
+.admin-bus-card .small-bus-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: #eff6ff;
+}
+
+/* Bus name */
+.admin-bus-card .bus-identity h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #101828;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compact stops badge */
+.admin-bus-card .bus-card-header-row > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+
+  max-width: 78px;
+  min-height: 30px;
+  padding: 5px 9px !important;
+
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #0052cc;
+
+  font-size: 11px !important;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* Route card spacing */
+.admin-buses-stack .admin-bus-card {
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  box-sizing: border-box;
+}
+
+/* Prevent inner route details from overflowing */
+.admin-bus-card .bus-route-inner-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.admin-bus-card .route-endpoint {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-bus-card .endpoint-city {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* Action buttons */
+.admin-bus-card .rt-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-bus-card .rt-action {
+  min-width: 0;
+  padding: 10px 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Small screens */
+@media (max-width: 360px) {
+  .admin-buses-stack .admin-bus-card {
+    padding: 12px;
+  }
+
+  .admin-bus-card .bus-identity {
+    gap: 7px;
+  }
+
+  .admin-bus-card .bus-identity h3 {
+    font-size: 13px;
+  }
+
+  .admin-bus-card .bus-card-header-row > span {
+    max-width: 70px;
+    padding: 5px 7px !important;
+    font-size: 10px !important;
+  }
+
+  .admin-bus-card .rt-actions {
+    gap: 6px;
+  }
+}

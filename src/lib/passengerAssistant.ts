@@ -2,14 +2,20 @@ import { createServerFn } from "@tanstack/react-start";
 
 const UPSRTC_URL = "https://www.onlineupsrtc.co.in/#/home";
 const TINYFISH_BASE = "https://agent.tinyfish.ai/v1";
-const MAX_WAIT_MS = 60_000;
-const POLL_MS = 2500;
+const MAX_WAIT_MS = 150_000;
+const POLL_MS = 3000;
 
-const GREETING =
-  /^(hi+|hello|hey|namaste|good (morning|afternoon|evening)|thanks|thank you|ok|okay)[\s!.?]*$/i;
+type TinyFishStartResponse = {
+  run_id?: string;
+  id?: string;
+  run?: { id?: string };
+};
 
-const NOT_FOUND_MESSAGE =
-  "I couldn't find that on the UPSRTC website. Please check the official site or call UPSRTC customer care.";
+type TinyFishRun = {
+  status?: string;
+  result?: unknown;
+  error?: unknown;
+};
 
 function extractAnswer(value: unknown): string {
   if (typeof value === "string") {
@@ -37,37 +43,26 @@ function extractAnswer(value: unknown): string {
 }
 
 function buildGoal(question: string) {
-  return `You are helping a bus passenger using the UPSRTC website (onlineupsrtc.co.in).
+  return `A bus passenger has sent this message to the UPSRTC assistant:
+"${question}"
 
-Passenger question: "${question}"
-
-Rules:
-- Use only text that is actually visible on the site (menus, pages, FAQs, timings, fares, routes).
-- Do not guess, infer, or use general knowledge.
-- Do not book tickets, pay, log in, submit forms, or enter personal information.
-- If the question is not about UPSRTC bus services, reply with exactly: NOT_APPLICABLE
-- If you find the answer, reply in 1 to 3 plain sentences and name the page or section where you found it.
-- If the answer is not visible on the site, reply with exactly: NOT_FOUND`;
+Respond to the passenger using the UPSRTC website (onlineupsrtc.co.in).
+- Use information you can see on the site to answer. Do not use general knowledge.
+- If the site does not contain the answer, say so plainly and suggest the passenger contact UPSRTC customer care.
+- Do not book tickets, make payments, log in, submit forms, or enter personal information.
+- Keep the reply short and in plain language.`;
 }
 
 export const askUpsrtcAssistant = createServerFn({ method: "POST" })
-  .inputValidator((input: { question: string }) => {
+  .validator((input: { question: string }) => {
     const question = String(input?.question ?? "").trim();
-    if (!question) throw new Error("Please enter a question.");
+    if (!question) throw new Error("Please enter a message.");
     if (question.length > 500) {
-      throw new Error("Please keep your question under 500 characters.");
+      throw new Error("Please keep your message under 500 characters.");
     }
     return { question };
   })
   .handler(async ({ data }): Promise<{ answer: string }> => {
-    // Skip the agent run for greetings and small talk.
-    if (GREETING.test(data.question)) {
-      return {
-        answer:
-          "Hello! I can help with UPSRTC bus information, such as routes, timings, and fares. What would you like to know?",
-      };
-    }
-
     const apiKey = process.env["TINYFISH_API_KEY"];
     if (!apiKey) throw new Error("The server is missing TINYFISH_API_KEY.");
 
@@ -89,52 +84,53 @@ export const askUpsrtcAssistant = createServerFn({ method: "POST" })
 
     if (!startedRes.ok) {
       const body = (await startedRes.text().catch(() => "")).slice(0, 300);
-      console.error("[TinyFish start]", startedRes.status, body);
+      console.error("[TinyFish start FAILED]", startedRes.status, body);
       throw new Error(`TinyFish could not start (${startedRes.status}).`);
     }
 
-    const started = (await startedRes.json()) as {
-  run_id?: string;
-  id?: string;
-  run?: { id?: string };
-};
+    const started = (await startedRes.json()) as TinyFishStartResponse;
+    console.log("[TinyFish start OK]", JSON.stringify(started));
 
-const runId = started.run_id ?? started.id ?? started.run?.id;
+    const runId = started.run_id ?? started.id ?? started.run?.id;
+
     if (!runId) {
       console.error("[TinyFish no run id]", JSON.stringify(started).slice(0, 500));
       throw new Error("TinyFish did not return a run ID.");
     }
 
+    console.log("[TinyFish run id]", runId);
+
     const deadline = Date.now() + MAX_WAIT_MS;
+    let pollCount = 0;
 
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, POLL_MS));
+      pollCount++;
 
       const pollRes = await fetch(`${TINYFISH_BASE}/runs/${runId}`, { headers });
-      if (pollRes.status === 429 || pollRes.status >= 500) continue;
+
+      if (pollRes.status === 429 || pollRes.status >= 500) {
+        console.warn(`[TinyFish poll #${pollCount}] retrying after ${pollRes.status}`);
+        continue;
+      }
 
       if (!pollRes.ok) {
+        const body = (await pollRes.text().catch(() => "")).slice(0, 300);
+        console.error(`[TinyFish poll #${pollCount} FAILED]`, pollRes.status, body);
         throw new Error(`TinyFish status check failed (${pollRes.status}).`);
       }
 
-      const run = (await pollRes.json()) as {
-        status?: string;
-        result?: unknown;
-        error?: unknown;
-      };
+      const run = (await pollRes.json()) as TinyFishRun;
       const status = String(run.status ?? "").toUpperCase();
+      console.log(`[TinyFish poll #${pollCount}] status=${status}`);
 
       if (status === "COMPLETED") {
         const answer = extractAnswer(run.result).trim();
-
-        if (!answer || /^NOT_FOUND\b/i.test(answer)) return { answer: NOT_FOUND_MESSAGE };
-        if (/^NOT_APPLICABLE\b/i.test(answer)) {
-          return {
-            answer:
-              "I can only help with UPSRTC bus information, such as routes, timings, and fares.",
-          };
-        }
-        return { answer };
+        console.log("[TinyFish result]", JSON.stringify(run.result).slice(0, 500));
+        return {
+          answer:
+            answer || "I couldn't get an answer from the UPSRTC site. Please try rephrasing.",
+        };
       }
 
       if (status === "FAILED" || status === "CANCELLED") {
@@ -142,6 +138,8 @@ const runId = started.run_id ?? started.id ?? started.run?.id;
         throw new Error("The UPSRTC lookup did not complete. Please try again.");
       }
     }
+
+    console.error(`[TinyFish TIMEOUT] after ${pollCount} polls, run id ${runId}`);
 
     await fetch(`${TINYFISH_BASE}/runs/${runId}/cancel`, {
       method: "POST",

@@ -114,50 +114,24 @@ export default function PassengerChatbot() {
     setBusy(true);
 
     try {
-      const lower = question.toLowerCase();
-      if (/^(hi+|hello|hey|namaste|thanks|thank you)[\s!.?]*$/i.test(question)) {
-  addMessage({
-    role: "assistant",
-    text: "Hello! I can help with UPSRTC routes, bus timings, and fares. Where are you boarding, and where are you going?",
-  });
-  return;
-}
-      const isComplaint = /complain|complaint|problem|issue|bad service|rude/i.test(lower);
-      const isRouteQuestion = /bus|route|track|travel|from|boarding|destination|to /i.test(lower);
+      const mentioned = findLocations(question);
+      let from = routeDraft.from;
+      let to = routeDraft.to;
 
-      if (isComplaint) {
-        addMessage({
-          role: "assistant",
-          text: "I’m sorry you had that experience. I can help check a route or bus here. This chat doesn’t submit or save complaints; please contact UPSRTC through its official channels to report the issue.",
-        });
-        return;
+      if (mentioned.length >= 2) {
+        [from, to] = mentioned;
+      } else if (mentioned.length === 1) {
+        if (!from) from = mentioned[0];
+        else if (!to && normalize(from) !== normalize(mentioned[0])) {
+          to = mentioned[0];
+        }
       }
 
-      if (isRouteQuestion) {
-        const mentioned = findLocations(question);
-        let from = routeDraft.from;
-        let to = routeDraft.to;
+      const isRouteRequest = /\b(bus|route|track|travel|boarding|destination)\b/i.test(
+        question,
+      );
 
-        if (mentioned.length >= 2) {
-          [from, to] = mentioned;
-        } else if (mentioned.length === 1) {
-          if (!from) from = mentioned[0];
-          else if (!to && normalize(from) !== normalize(mentioned[0])) {
-            to = mentioned[0];
-          }
-        }
-
-        if (!from || !to) {
-          setRouteDraft({ from, to });
-          addMessage({
-            role: "assistant",
-            text: from
-              ? `I have ${from} as your boarding point. What is your destination?`
-              : "Which city or bus stop are you boarding from, and where are you going?",
-          });
-          return;
-        }
-
+      if (isRouteRequest && from && to) {
         setRouteDraft({ from: "", to: "" });
         addMessage({
           role: "assistant",
@@ -169,7 +143,7 @@ export default function PassengerChatbot() {
         if (!buses.length) {
           addMessage({
             role: "assistant",
-            text: `I couldn’t find a saved bus schedule from ${from} to ${to}. Try another stop name from the location suggestions.`,
+            text: `I couldn't find a saved bus schedule from ${from} to ${to}. Would you like me to check the UPSRTC website instead?`,
           });
           return;
         }
@@ -188,10 +162,11 @@ export default function PassengerChatbot() {
         return;
       }
 
+      // Anything else goes to TinyFish, which answers from the UPSRTC website.
       const result = await askUpsrtcAssistant({ data: { question } });
       addMessage({
         role: "assistant",
-        text: result?.answer || "I couldn’t find an answer. Please try rephrasing.",
+        text: result?.answer || "I couldn't get an answer. Please try again.",
       });
     } catch (error) {
       addMessage({
@@ -246,9 +221,14 @@ export default function PassengerChatbot() {
                 {message.buses?.map((bus) => (
                   <div className="passenger-chat-bus" key={bus.id}>
                     <strong>{bus.name}</strong>
-                    <small>{bus.from} → {bus.to}</small>
+                    <small>
+                      {bus.from} → {bus.to}
+                    </small>
                     <div>
-                      <button type="button" onClick={() => openResults(bus.from, bus.to, bus.date)}>
+                      <button
+                        type="button"
+                        onClick={() => openResults(bus.from, bus.to, bus.date)}
+                      >
                         See results
                       </button>
                       <button type="button" onClick={() => openTracking(bus)}>

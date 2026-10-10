@@ -28,7 +28,7 @@ const ORDINARY_BUS_IMAGE =
   "https://www.onlineupsrtc.co.in/assets/icons/Ordinary.png";
 const AC_BUS_IMAGE =
   "https://www.onlineupsrtc.co.in/assets/icons/bus_ac_janrath_2x2.png";
-
+const DEMO_START = [77.521660, 28.478731]; 
 const DEMO_ROUTE = [
   { id: "start", label: "S", name: "Stop S", coordinates: [77.521577, 28.478776] },
   { id: "a", label: "A", name: "Stop A", coordinates: [77.52207, 28.47814] },
@@ -467,56 +467,61 @@ export default function TrackBus() {
   }, [mapReady, isDemo]);
 
   // Live position: initial fetch + realtime subscription.
-  useEffect(() => {
-    let mounted = true;
-    firstFixRef.current = true;
-    setLive(null);
+  // Live position: start the demo at Stop S; real buses use their saved GPS.
+useEffect(() => {
+  let mounted = true;
+  firstFixRef.current = true;
 
-    const table = isDemo ? "demo_live_tracking" : "live_locations";
-    const column = isDemo ? "id" : "bus_id";
-    const value = isDemo ? DEMO_ROW_ID : busId;
+  const startPosition = {
+    latitude: 28.478731,
+    longitude: 77.521660,
+    heading: 0,
+    speed: null,
+    isStarted: false,
+    updatedAt: null,
+    trail: [],
+  };
 
-    async function loadLatest() {
-      const { data, error } = await supabase
-        .from(table)
-        .select("*")
-        .eq(column, value)
-        .maybeSingle();
+  // Demo always starts at Stop S, ignoring any old GPS row in Supabase.
+  setLive(isDemo ? startPosition : null);
 
-      if (error) {
-        console.warn("Live location error:", error);
-        return;
-      }
+  if (isDemo) {
+    setOriginCoords([77.521660, 28.478731]);
+  }
 
-      if (mounted) setLive(normalizeLive(data));
-    }
+  const table = isDemo ? "demo_live_tracking" : "live_locations";
+  const column = isDemo ? "id" : "bus_id";
+  const value = isDemo ? DEMO_ROW_ID : busId;
 
-    loadLatest();
+  const channel = supabase
+    .channel(`trackbus-${table}-${busId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table,
+        filter: `${column}=eq.${value}`,
+      },
+      (payload) => {
+        if (!mounted || payload.eventType === "DELETE") return;
 
-    const channel = supabase
-      .channel(`trackbus-${table}-${busId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table,
-          filter: `${column}=eq.${value}`,
-        },
-        (payload) => {
-          if (!mounted || payload.eventType === "DELETE") return;
-          const next = normalizeLive(payload.new);
-          if (next) setLive(next);
-        }
-      )
-      .subscribe();
+        const next = normalizeLive(payload.new);
+        if (!next) return;
 
-    return () => {
-      mounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, [isDemo, busId]);
+        // Only move the demo pointer after the driver explicitly starts tracking.
+        if (isDemo && !next.isStarted) return;
 
+        setLive(next);
+      },
+    )
+    .subscribe();
+
+  return () => {
+    mounted = false;
+    supabase.removeChannel(channel);
+  };
+}, [isDemo, busId]);
   // Bus icon: live position if available, otherwise the starting bus stand.
   useEffect(() => {
     const map = mapRef.current;
